@@ -81,7 +81,9 @@ class BoolLitToken {
   constructor(public readonly value: boolean) {}
 }
 
-class NullLitToken {}
+class NullLitToken {
+  constructor(public readonly value: null) {}
+}
 
 class ReservedToken {
   constructor(public readonly keyword: string) {}
@@ -404,7 +406,7 @@ function lexBoolLit(input: string): [BoolLitToken, string] | undefined {
 
 function lexNullLit(input: string): [NullLitToken, string] | undefined {
   if (input.startsWith("null")) {
-    return [new NullLitToken(), input.slice(4)];
+    return [new NullLitToken(null), input.slice(4)];
   }
   return undefined;
 }
