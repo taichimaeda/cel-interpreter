@@ -298,7 +298,6 @@ function parseUnary(tokens: Token[]): [UnaryExpr, Token[]] | undefined {
   const operators: string[] = [];
   if (matchesOperatorToken(tokens[0], "!", "-")) {
     const firstOperator = tokens[0];
-    operators.push(tokens[0].operator);
     while (matchesOperatorToken(tokens[0], firstOperator.operator)) {
       operators.push(tokens[0].operator);
       tokens = tokens.slice(1);
@@ -523,7 +522,7 @@ function parseMapInits(tokens: Token[]): [[Expr, Expr][], Token[]] | undefined {
 }
 
 function testParser() {
-  const input = `myNum == 123 && (myStr == "hello" || myBool == true)`;
+  const input = `!!(myNum == 123 && (myStr == "hello" || myBool == true) ? myNum + 1 == 2 : -myNum - 1 == 10)`;
   const lexed = lexer(input);
   const parsed = parser(lexed);
   console.log(parsed);

@@ -419,7 +419,7 @@ function evalIdent(ident: Ident, activation: Activation): Value {
 }
 
 function testInterpreter() {
-  const input = `myNum == 123 && (myStr == "hello" || myBool == true)`;
+  const input = `!!(myNum == 123 && (myStr == "hello" || myBool == true) ? myNum + 1 == 2 : -myNum - 1 == 10)`;
   const lexed = lexer(input);
   const parsed = parser(lexed);
   const activation = {
@@ -427,8 +427,14 @@ function testInterpreter() {
     myStr: new StringValue("hello"),
     myBool: new BoolValue(true),
   };
-  const result = interpreter(parsed, activation);
-  console.log(result);
+  const result1 = interpreter(parsed, activation);
+  console.log(result1);
+
+  const myNum = 13 as number;
+  const myStr = "hello";
+  const myBool = true;
+  const result2 = !!(myNum == 123 && (myStr == "hello" || myBool == true) ? myNum + 1 == 2 : -myNum - 1 == 10);
+  console.log(result2);
 }
 
 testInterpreter();

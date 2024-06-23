@@ -457,7 +457,7 @@ function lexComment(input: string): [CommentToken, string] | undefined {
 }
 
 function testLexer() {
-  const input = `myNum == 123 && (myStr == "hello" || myBool == true)`;
+  const input = `!!(myNum == 123 && (myStr == "hello" || myBool == true) ? myNum + 1 == 2 : -myNum - 1 == 10)`;
   const lexed = lexer(input);
   for (const token of lexed) {
     console.log(token);
