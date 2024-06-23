@@ -72,11 +72,11 @@ export class NullValue {
 }
 
 export class ListValue {
-  constructor(public readonly values: any[]) {}
+  constructor(public readonly value: any[]) {}
 }
 
 export class MapValue {
-  constructor(public readonly values: Record<any, any>[]) {}
+  constructor(public readonly value: Record<any, any>) {}
 }
 
 function interpreter(expr: Expr, activation: Activation): any {
@@ -122,33 +122,65 @@ function evalAndExpr(andExpr: AndExpr, activation: Activation): Value {
   return new BoolValue(exprs.every((expr) => expr.value));
 }
 
+function valuesEqual(left: Value, right: Value): boolean {
+  if (left instanceof ListValue && right instanceof ListValue) {
+    return listValuesEqual(left, right);
+  }
+  if (left instanceof MapValue && right instanceof MapValue) {
+    return mapValuesEqual(left, right);
+  }
+  return left.value === right.value;
+}
+
 function listValuesEqual(left: ListValue, right: ListValue): boolean {
   return (
-    left.values.length === right.values.length &&
-    left.values.every((_, i) => {
-      if (left.values[i] instanceof ListValue && right.values[i] instanceof ListValue) {
-        return listValuesEqual(left.values[i], right.values[i]);
+    left.value.length === right.value.length &&
+    left.value.every((_, i) => {
+      if (left.value[i] instanceof ListValue && right.value[i] instanceof ListValue) {
+        return listValuesEqual(left.value[i], right.value[i]);
       }
-      if (left.values[i] instanceof MapValue && right.values[i] instanceof MapValue) {
-        return mapValuesEqual(left.values[i], right.values[i]);
+      if (left.value[i] instanceof MapValue && right.value[i] instanceof MapValue) {
+        return mapValuesEqual(left.value[i], right.value[i]);
       }
-      return left.values[i] === right.values[i];
+      return left.value[i] === right.value[i];
     })
   );
 }
 
 function mapValuesEqual(left: MapValue, right: MapValue): boolean {
-  const leftKeys = Object.keys(left.values).sort();
-  const rightKeys = Object.keys(right.values).sort();
+  const leftKeys = Object.keys(left.value).sort();
+  const rightKeys = Object.keys(right.value).sort();
   if (leftKeys.length !== rightKeys.length || !leftKeys.every((_, i) => leftKeys[i] === rightKeys[i])) {
     return false;
   }
   return leftKeys.every((key) => {
-    if (left.values[key] instanceof ListValue && right.values[key] instanceof ListValue) {
-      return listValuesEqual(left.values[key], right.values[key]);
+    if (left.value[key] instanceof ListValue && right.value[key] instanceof ListValue) {
+      return listValuesEqual(left.value[key], right.value[key]);
     }
-    return left.values[key] === right.values[key];
+    return left.value[key] === right.value[key];
   });
+}
+
+function valuesLessThan(left: Value, right: Value): boolean {
+  if (left instanceof ListValue || right instanceof ListValue) {
+    throw new Error("List comparison is not implemented");
+  }
+  if (left instanceof MapValue || right instanceof MapValue) {
+    throw new Error("Map comparison is not implemented");
+  }
+  return left.value < right.value;
+}
+
+function valuesLessThanOrEqual(left: Value, right: Value): boolean {
+  return valuesLessThan(left, right) || valuesEqual(left, right);
+}
+
+function valueInList(left: Value, right: ListValue): boolean {
+  return right.value.some((value) => valuesEqual(left, value));
+}
+
+function valueInMap(left: Value, right: MapValue): boolean {
+  return Object.keys(right.value).some((key) => valuesEqual(left, new StringValue(key)));
 }
 
 function evalRelExpr(relExpr: RelExpr, activation: Activation): Value {
@@ -158,61 +190,35 @@ function evalRelExpr(relExpr: RelExpr, activation: Activation): Value {
     return exprs[0];
   }
   // TODO: Handle in operator
-  if (
-    exprs.every((expr) => expr instanceof IntValue || expr instanceof UintValue || expr instanceof FloatValue) ||
-    exprs.every((expr) => expr instanceof StringValue) ||
-    exprs.every((expr) => expr instanceof ByteValue) ||
-    exprs.every((expr) => expr instanceof BoolValue)
-  ) {
-    const value = ops.reduce((acc, op, i) => {
-      const left = exprs[i].value;
-      const right = exprs[i + 1].value;
-      switch (op) {
-        case "==":
-          return acc && left === right;
-        case "!=":
-          return acc && left !== right;
-        case "<":
-          return acc && left < right;
-        case "<=":
-          return acc && left <= right;
-        case ">":
-          return acc && left > right;
-        case ">=":
-          return acc && left >= right;
-        default:
-          throw new Error(`Unexpected operator ${op}`);
-      }
-    }, true);
-    return new BoolValue(value);
-  }
-  if (exprs.every((expr) => expr instanceof ListValue)) {
-    const value = ops.reduce((acc, op, i) => {
-      const left = exprs[i];
-      const right = exprs[i + 1];
-      switch (op) {
-        case "==":
-          return acc && listValuesEqual(left, right);
-        default:
-          throw new Error(`Unexpected operator ${op}`);
-      }
-    }, true);
-    return new BoolValue(value);
-  }
-  if (exprs.every((expr) => expr instanceof MapValue)) {
-    const value = ops.reduce((acc, op, i) => {
-      const left = exprs[i];
-      const right = exprs[i + 1];
-      switch (op) {
-        case "==":
-          return acc && mapValuesEqual(left, right);
-        default:
-          throw new Error(`Unexpected operator ${op}`);
-      }
-    }, true);
-    return new BoolValue(value);
-  }
-  throw new Error(`Unexpected operands ${exprs}`);
+  const value = ops.reduce((acc, op, i) => {
+    const left = exprs[i];
+    const right = exprs[i + 1];
+    switch (op) {
+      case "==":
+        return acc && valuesEqual(left, right);
+      case "!=":
+        return acc && !valuesEqual(left, right);
+      case "<":
+        return acc && valuesLessThan(left, right);
+      case "<=":
+        return acc && valuesLessThanOrEqual(left, right);
+      case ">":
+        return acc && !valuesLessThan(left, right);
+      case ">=":
+        return acc && !valuesLessThanOrEqual(left, right);
+      case "in":
+        if (right instanceof ListValue) {
+          return acc && valueInList(left, right);
+        }
+        if (right instanceof MapValue) {
+          return acc && valueInMap(left, right);
+        }
+        throw new Error(`Unexpected operand ${right}`);
+      default:
+        throw new Error(`Unexpected operator ${op}`);
+    }
+  }, true);
+  return new BoolValue(value);
 }
 
 function evalAddExpr(addExpr: AddExpr, activation: Activation): Value {
@@ -225,7 +231,7 @@ function evalAddExpr(addExpr: AddExpr, activation: Activation): Value {
     if (!ops.every((op) => op === "+")) {
       throw new Error(`Unexpected operators ${ops}`);
     }
-    return new ListValue(exprs.flatMap((expr) => expr.values));
+    return new ListValue(exprs.flatMap((expr) => expr.value));
   }
   if (exprs.every((expr) => expr instanceof StringValue)) {
     if (!ops.every((op) => op === "+")) {
@@ -354,13 +360,13 @@ function evalIndexExpr(indexExpr: IndexExpr, activation: Activation): Value {
     if (!(index instanceof IntValue || index instanceof UintValue)) {
       throw new Error(`Unexpected index ${index}`);
     }
-    return member.values[index.value];
+    return member.value[index.value];
   }
   if (member instanceof MapValue) {
     if (!(index instanceof StringValue || index instanceof IntValue || index instanceof UintValue)) {
       throw new Error(`Unexpected index ${index}`);
     }
-    return member.values[index.value];
+    return member.value[index.value];
   }
   throw new Error(`Unexpected member ${member}`);
 }

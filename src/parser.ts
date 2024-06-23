@@ -32,6 +32,7 @@ NOTE:
 * Skipping error handling for convenience
 * Skipping field selection because protobuf support is not implemented
 * Skipping field inits because protobuf support is not implemented
+* Skipping partial evaluation
 */
 
 /*
