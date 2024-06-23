@@ -28,6 +28,7 @@ MapInits       ::= Expr ":" Expr {"," Expr ":" Expr} ;
 
 /*
 NOTE:
+* Avoiding exceptions for functional design
 * Skipping LL(1) grammar for convenience
 * Skipping error handling for convenience
 * Skipping field selection because protobuf support is not implemented
@@ -38,11 +39,12 @@ NOTE:
 /*
 NOTE:
 Member  ::= Primary
-        | Member [["." IDENT] "(" [ExprList] ")"]
+        | Member "." IDENT "(" [ExprList] ")"
         | Member "[" Expr "]"
         ;
+Member' ::= Primary {"." IDENT "(" [ExprList] ")" | "[" Expr "]"}
 Primary ::= LITERAL
-        | IDENT
+        | IDENT ["(" [ExprList] ")"]
         | "(" Expr ")"
         | "[" [ExprList] [","] "]"
         | "{" [MapInits] [","] "}" 
@@ -313,70 +315,66 @@ function parseUnary(tokens: Token[]): [UnaryExpr, Token[]] | undefined {
   return [new UnaryExpr(unary, operators), tokens];
 }
 
-function newIdentExpr(name: string): Expr {
+function newMemberExpr(member: Member): Expr {
   // TODO: Find a better way to handle method call syntax
-  const addExpr = new AddExpr([new MultExpr([new UnaryExpr(new Ident(name), [])], [])], []);
+  const addExpr = new AddExpr([new MultExpr([new UnaryExpr(member, [])], [])], []);
   const orExpr = new OrExpr([new AndExpr([new RelExpr([addExpr], [])])]);
   return orExpr;
 }
 
+// TODO: Rewrite according to the new grammar
 function parseMember(tokens: Token[]): [Member, Token[]] | undefined {
   const retPrimary = parsePrimary(tokens);
-  if (retPrimary !== undefined) {
-    return retPrimary;
-  }
-  const retMember = parseMember(tokens);
-  if (retMember === undefined) {
+  if (retPrimary === undefined) {
     return undefined;
   }
-  const member = retMember[0];
-  tokens = retMember[1];
-  if (matchesControlToken(tokens[0], ".", "(")) {
-    let method;
+  let member: Member = retPrimary[0];
+  tokens = retPrimary[1];
+  while (matchesControlToken(tokens[0], ".", "[")) {
     if (matchesControlToken(tokens[0], ".")) {
       tokens = tokens.slice(1);
       if (!(tokens[0] instanceof IdentToken)) {
         return undefined;
       }
-      method = tokens[0].ident;
+      const ident = tokens[0].ident;
       tokens = tokens.slice(1);
+      if (!matchesControlToken(tokens[0], "(")) {
+        return undefined;
+      }
+      tokens = tokens.slice(1);
+      const retExprList = parseExprList(tokens);
+      if (retExprList === undefined) {
+        return undefined;
+      }
+      const exprList = retExprList[0];
+      tokens = retExprList[1];
+      if (!matchesControlToken(tokens[0], ")")) {
+        return undefined;
+      }
+      tokens = tokens.slice(1);
+      member = new FuncCallExpr(new Ident(ident), [newMemberExpr(member), ...exprList]);
+      continue;
     }
-    if (!matchesControlToken(tokens[0], "(")) {
-      return undefined;
+    if (matchesControlToken(tokens[0], "[")) {
+      tokens = tokens.slice(1);
+      const retExpr = parseExpr(tokens);
+      if (retExpr === undefined) {
+        return undefined;
+      }
+      const expr = retExpr[0];
+      tokens = retExpr[1];
+      if (!matchesControlToken(tokens[0], "]")) {
+        return undefined;
+      }
+      tokens = tokens.slice(1);
+      member = new IndexExpr(member, expr);
+      continue;
     }
-    tokens = tokens.slice(1);
-    const retExprList = parseExprList(tokens);
-    if (retExprList === undefined) {
-      return undefined;
-    }
-    const exprList = retExprList[0];
-    if (method !== undefined) {
-      exprList.unshift(newIdentExpr(method));
-    }
-    tokens = retExprList[1];
-    if (!matchesControlToken(tokens[0], ")")) {
-      return undefined;
-    }
-    tokens = tokens.slice(1);
-    return [new FuncCallExpr(member, exprList), tokens];
-  }
-  if (matchesControlToken(tokens[0], "[")) {
-    tokens = tokens.slice(1);
-    const retExpr = parseExpr(tokens);
-    if (retExpr === undefined) {
-      return undefined;
-    }
-    const expr = retExpr[0];
-    tokens = retExpr[1];
-    if (!matchesControlToken(tokens[0], "]")) {
-      return undefined;
-    }
-    tokens = tokens.slice(1);
-    return [new IndexExpr(member, expr), tokens];
   }
   return [member, tokens];
 }
 
+// TODO: Rewrite according to the new grammar
 function parsePrimary(tokens: Token[]): [Primary, Token[]] | undefined {
   const retLiteral = parseLiteral(tokens);
   if (retLiteral !== undefined) {
@@ -385,7 +383,21 @@ function parsePrimary(tokens: Token[]): [Primary, Token[]] | undefined {
   if (tokens[0] instanceof IdentToken) {
     const ident = tokens[0].ident;
     tokens = tokens.slice(1);
-    return [new Ident(ident), tokens];
+    if (!matchesControlToken(tokens[0], "(")) {
+      return [new Ident(ident), tokens];
+    }
+    tokens = tokens.slice(1);
+    const retExprList = parseExprList(tokens);
+    if (retExprList === undefined) {
+      return undefined;
+    }
+    const exprList = retExprList[0];
+    tokens = retExprList[1];
+    if (!matchesControlToken(tokens[0], ")")) {
+      return undefined;
+    }
+    tokens = tokens.slice(1);
+    return [new FuncCallExpr(new Ident(ident), exprList), tokens];
   }
   if (matchesControlToken(tokens[0], "(")) {
     tokens = tokens.slice(1);
@@ -479,25 +491,25 @@ function parseLiteral(tokens: Token[]): [Literal, Token[]] | undefined {
 
 function parseExprList(tokens: Token[]): [Expr[], Token[]] | undefined {
   const exprs: Expr[] = [];
-  while (matchesControlToken(tokens[0], ",")) {
-    tokens = tokens.slice(1);
+  while (true) {
     const ret = parseExpr(tokens);
     if (ret === undefined) {
       return undefined;
     }
-    exprs.push(ret[0]);
+    const expr = ret[0];
     tokens = ret[1];
-  }
-  if (exprs.length === 0) {
-    return undefined;
+    exprs.push(expr);
+    if (!matchesControlToken(tokens[0], ",")) {
+      break;
+    }
+    tokens = tokens.slice(1);
   }
   return [exprs, tokens];
 }
 
 function parseMapInits(tokens: Token[]): [[Expr, Expr][], Token[]] | undefined {
   const mapInits: [Expr, Expr][] = [];
-  while (matchesControlToken(tokens[0], ",")) {
-    tokens = tokens.slice(1);
+  while (true) {
     const retKey = parseExpr(tokens);
     if (retKey === undefined) {
       return undefined;
@@ -515,15 +527,17 @@ function parseMapInits(tokens: Token[]): [[Expr, Expr][], Token[]] | undefined {
     const value = retValue[0];
     tokens = retValue[1];
     mapInits.push([key, value]);
-  }
-  if (mapInits.length === 0) {
-    return undefined;
+    if (!matchesControlToken(tokens[0], ",")) {
+      break;
+    }
+    tokens = tokens.slice(1);
   }
   return [mapInits, tokens];
 }
 
 function testParser() {
-  const input = `!!(myNum == 123 && (myStr == "hello" || myBool == true) ? myNum + 1 == 2 : -myNum - 1 == 10)`;
+  // const input = `!!(myNum == 123 && (myStr == "hello" || myBool == true) ? myNum + 1 == 2 : -myNum - 1 == 10)`;
+  const input = `size(myStr) == 5`;
   const lexed = lexer(input);
   const parsed = parser(lexed);
   console.log(parsed);

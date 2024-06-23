@@ -72,18 +72,18 @@ export class NullValue {
 }
 
 export class ListValue {
-  constructor(public readonly value: any[]) {}
+  constructor(public readonly value: Value[]) {}
 }
 
 export class MapValue {
-  constructor(public readonly value: Record<any, any>) {}
+  constructor(public readonly value: [Value, Value][]) {}
 }
 
-function interpreter(expr: Expr, activation: Activation): any {
+function interpreter(expr: Expr, activation: Activation): Value {
   return evalExpr(expr, activation);
 }
 
-function evalExpr(expr: Expr, activation: Activation): any {
+function evalExpr(expr: Expr, activation: Activation): Value {
   if (expr instanceof TernaryExpr) {
     return evalTernaryExpr(expr, activation);
   } else {
@@ -363,10 +363,11 @@ function evalIndexExpr(indexExpr: IndexExpr, activation: Activation): Value {
     return member.value[index.value];
   }
   if (member instanceof MapValue) {
-    if (!(index instanceof StringValue || index instanceof IntValue || index instanceof UintValue)) {
-      throw new Error(`Unexpected index ${index}`);
+    const item = member.value.find(([key]) => valuesEqual(key, index));
+    if (!item) {
+      throw new Error(`Key not found ${index}`);
     }
-    return member.value[index.value];
+    return item[1];
   }
   throw new Error(`Unexpected member ${member}`);
 }
@@ -410,9 +411,7 @@ function evalPrimary(primary: Primary, activation: Activation): Value {
     return new ListValue(primary.exprs.map((expr) => evalExpr(expr, activation)));
   }
   if (primary instanceof MapExpr) {
-    return new MapValue(
-      Object.fromEntries(primary.exprs.map(([key, value]) => [evalExpr(key, activation), evalExpr(value, activation)]))
-    );
+    return new MapValue(primary.exprs.map(([key, value]) => [evalExpr(key, activation), evalExpr(value, activation)]));
   }
   return evalExpr(primary, activation);
 }
@@ -426,6 +425,9 @@ function evalIdent(ident: Ident, activation: Activation): Value {
 
 function testInterpreter() {
   const input = `!!(myNum == 123 && (myStr == "hello" || myBool == true) ? myNum + 1 == 2 : -myNum - 1 == 10)`;
+  // const input = `true && size(myStr) == 3`;
+  // const input = `{ "a": 1, "b": 2 } == { "a": 1, "b": 2 }`;
+  // const input = `{ "a": [1, 2], "b": { "c": 3 } }["b"]["c"] == 3`;
   const lexed = lexer(input);
   const parsed = parser(lexed);
   const activation = {
