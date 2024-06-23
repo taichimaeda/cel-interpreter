@@ -26,27 +26,12 @@ FieldInits     ::= IDENT ":" Expr {"," IDENT ":" Expr} ;
 MapInits       ::= Expr ":" Expr {"," Expr ":" Expr} ;
 */
 
-type NodeType =
-  | "INT"
-  | "UINT"
-  | "DOUBLE"
-  | "BOOL"
-  | "STRING"
-  | "BYTES"
-  | "LIST"
-  | "MAP"
-  | "NULL"
-  | "MESSAGE"
-  | "TYPE";
+type NodeType = "INT" | "UINT" | "DOUBLE" | "BOOL" | "STRING" | "BYTES" | "LIST" | "MAP" | "NULL" | "MESSAGE" | "TYPE";
 
 type Expr = OrExpr | TernaryExpr;
 
 class TernaryExpr {
-  constructor(
-    public readonly cond: OrExpr,
-    public readonly then?: OrExpr,
-    public readonly els?: Expr
-  ) {}
+  constructor(public readonly cond: OrExpr, public readonly then?: OrExpr, public readonly els?: Expr) {}
 }
 
 class OrExpr {
@@ -58,34 +43,22 @@ class AndExpr {
 }
 
 class RelExpr {
-  constructor(
-    public readonly exprs: AddExpr[],
-    public readonly ops?: "<" | "<=" | ">=" | ">" | "==" | "!=" | "in"[]
-  ) {}
+  constructor(public readonly exprs: AddExpr[], public readonly ops?: "<" | "<=" | ">=" | ">" | "==" | "!=" | "in"[]) {}
 }
 
 class AddExpr {
-  constructor(
-    public readonly exprs: MultExpr[],
-    public readonly ops?: ("+" | "-")[]
-  ) {}
+  constructor(public readonly exprs: MultExpr[], public readonly ops?: ("+" | "-")[]) {}
 }
 
 class MultExpr {
-  constructor(
-    public readonly exprs: UnaryExpr[],
-    public readonly ops?: ("*" | "/" | "%")[]
-  ) {}
+  constructor(public readonly exprs: UnaryExpr[], public readonly ops?: ("*" | "/" | "%")[]) {}
 }
 
 class UnaryExpr {
-  constructor(
-    public readonly member: Member,
-    public readonly ops?: "!"[] | "-"[]
-  ) {}
+  constructor(public readonly member: Member, public readonly ops?: "!"[] | "-"[]) {}
 }
 
-type Member = Primary | MemberSelection | MemberIndexing;
+type Member = Primary | SelectionExpr | IndexingExpr;
 
 type Primary = Literal | Ident | Expr | ArrayLit | MapLit | FieldInit;
 
@@ -109,10 +82,53 @@ class FieldInit {
   constructor(public readonly exprs: Record<string, Expr>) {}
 }
 
-class MemberSelection {
+class SelectionExpr {
   constructor(public readonly member: Member, public readonly ident: string) {}
 }
 
-class MemberIndexing {
+class IndexingExpr {
   constructor(public readonly member: Member, public readonly index: Expr) {}
+}
+
+/*
+Expr           ::= ConditionalOr ["?" ConditionalOr ":" Expr] ;
+ConditionalOr  ::= [ConditionalOr "||"] ConditionalAnd ;
+ConditionalAnd ::= [ConditionalAnd "&&"] Relation ;
+Relation       ::= [Relation Relop] Addition ;
+Relop          ::= "<" | "<=" | ">=" | ">" | "==" | "!=" | "in" ;
+Addition       ::= [Addition ("+" | "-")] Multiplication ;
+Multiplication ::= [Multiplication ("*" | "/" | "%")] Unary ;
+Unary          ::= Member
+               | "!" {"!"} Member
+               | "-" {"-"} Member
+               ;
+Member         ::= Primary
+               | Member "." IDENT ["(" [ExprList] ")"]
+               | Member "[" Expr "]"
+               ;
+Primary        ::= ["."] IDENT ["(" [ExprList] ")"]
+               | "(" Expr ")"
+               | "[" [ExprList] [","] "]"
+               | "{" [MapInits] [","] "}"
+               | ["."] IDENT { "." IDENT } "{" [FieldInits] [","] "}"
+               | LITERAL
+               ;
+ExprList       ::= Expr {"," Expr} ;
+FieldInits     ::= IDENT ":" Expr {"," IDENT ":" Expr} ;
+MapInits       ::= Expr ":" Expr {"," Expr ":" Expr} ;
+*/
+
+function parser(tokens: Token[]): Expr {
+  return new OrExpr([]);
+}
+
+function parseOrExpr(tokens: Token[]): [OrExpr, Token[]] {
+  parseConditionalOr(tokens);
+
+  return [new OrExpr([]), tokens];
+}
+
+function parseConditionalOr(tokens: Token[]): [OrExpr, Token[]] {
+  parseConditionalAnd(tokens);
+  return [new OrExpr([]), tokens];
 }

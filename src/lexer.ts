@@ -32,6 +32,7 @@ COMMENT        ::= '//' ~NEWLINE* NEWLINE
 */
 
 type Token =
+  | ControlToken
   | IdentToken
   | IntLitToken
   | UintLitToken
@@ -43,6 +44,14 @@ type Token =
   | ReservedToken
   | WhitespaceToken
   | CommentToken;
+
+class ControlToken {
+  constructor(public readonly control: string) {}
+}
+
+class OperatorToken {
+  constructor(public readonly operator: string) {}
+}
 
 class IdentToken {
   constructor(public readonly ident: string) {}
@@ -82,31 +91,19 @@ class WhitespaceToken {} // Ignored
 
 class CommentToken {} // Ignored
 
-const NEWLINE_CHARS: string[] = ["\r\n", "\r", "\n"];
-const WHITESPACE_CHARS: string[] = [" ", "\t", "\n", "\f", "\r"];
-const RESERVED_KEYWORDS: string[] = [
-  "as",
-  "break",
-  "const",
-  "continue",
-  "else",
-  "for",
-  "function",
-  "if",
-  "import",
-  "let",
-  "loop",
-  "package",
-  "namespace",
-  "return",
-  "var",
-  "void",
-  "while",
-];
+const CONTROLS: string[] = ["?", ":", ".", "(", ")", "[", "]", "{", "}", ","];
+// prettier-ignore
+const OPERATORS: string[] = ["||", "&&", "<", "<=", ">=", ">", "==", "!=", "in", "+", "-", "*", "/", "%", "!"];
+// prettier-ignore
+const RESERVED: string[] = ["as", "break", "const", "continue", "else", "for", "function", "if", "import", "let", "loop", "package", "namespace", "return", "var", "void", "while"];
+const NEWLINES: string[] = ["\r\n", "\r", "\n"];
+const WHITESPACES: string[] = [" ", "\t", "\n", "\f", "\r"];
 
 function lexer(input: string): Token[] {
   const tokens: Token[] = [];
   const lexers = [
+    lexControl, // Before lexIdent
+    lexOperator, // Before lexIdent
     lexReserved, // Before lexIdent
     lexIdent,
     lexUintLit, // Before lexIntLit
@@ -123,9 +120,7 @@ function lexer(input: string): Token[] {
       const lexed = lexer(input);
       if (lexed !== undefined) {
         const [token, rest] = lexed;
-        if (
-          !(token instanceof WhitespaceToken || token instanceof CommentToken)
-        ) {
+        if (!(token instanceof WhitespaceToken || token instanceof CommentToken)) {
           tokens.push(token);
           input = rest;
         }
@@ -135,6 +130,24 @@ function lexer(input: string): Token[] {
     throw new Error(`Unexpected character: ${input[0]}`);
   }
   return tokens;
+}
+
+function lexControl(input: string): [ControlToken, string] | undefined {
+  for (const control of CONTROLS) {
+    if (input.startsWith(control)) {
+      return [new ControlToken(control), input.slice(1)];
+    }
+  }
+  return undefined;
+}
+
+function lexOperator(input: string): [OperatorToken, string] | undefined {
+  for (const operator of OPERATORS) {
+    if (input.startsWith(operator)) {
+      return [new OperatorToken(operator), input.slice(operator.length)];
+    }
+  }
+  return undefined;
 }
 
 function isIdentStart(c: string): boolean {
@@ -162,9 +175,7 @@ function isDigit(c: string): boolean {
 }
 
 function isHexDigit(c: string): boolean {
-  return (
-    (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F")
-  );
+  return (c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F");
 }
 
 function lexUintLit(input: string): [UintLitToken, string] | undefined {
@@ -258,17 +269,10 @@ function lexFloatWithDot(input: string): [FloatLitToken, string] | undefined {
     return [new FloatLitToken(parseFloat(`${digits}.${decimals}`)), input];
   }
   const [exponent, rest] = lexed;
-  return [
-    new FloatLitToken(
-      parseFloat(`${digits}.${decimals}e${exponent}`) * (positive ? 1 : -1)
-    ),
-    rest,
-  ];
+  return [new FloatLitToken(parseFloat(`${digits}.${decimals}e${exponent}`) * (positive ? 1 : -1)), rest];
 }
 
-function lexFloatWithoutDot(
-  input: string
-): [FloatLitToken, string] | undefined {
+function lexFloatWithoutDot(input: string): [FloatLitToken, string] | undefined {
   let positive = true;
   if (input.startsWith("-")) {
     positive = false;
@@ -287,12 +291,7 @@ function lexFloatWithoutDot(
     return undefined;
   }
   const [exponent, rest] = lexed;
-  return [
-    new FloatLitToken(
-      parseFloat(`${digits}e${exponent}`) * (positive ? 1 : -1)
-    ),
-    rest,
-  ];
+  return [new FloatLitToken(parseFloat(`${digits}e${exponent}`) * (positive ? 1 : -1)), rest];
 }
 
 function lexExponent(input: string): [number, string] | undefined {
@@ -349,7 +348,7 @@ function lexStringLitSingle(input: string): [string, string] | undefined {
         input = input.slice(1);
         continue;
       }
-      for (const newline of NEWLINE_CHARS) {
+      for (const newline of NEWLINES) {
         if (input.startsWith(newline)) {
           return undefined;
         }
@@ -411,9 +410,9 @@ function lexNullLit(input: string): [NullLitToken, string] | undefined {
 }
 
 function lexReserved(input: string): [ReservedToken, string] | undefined {
-  for (const keyword of RESERVED_KEYWORDS) {
-    if (input.startsWith(keyword)) {
-      return [new ReservedToken(keyword), input.slice(keyword.length)];
+  for (const reserved of RESERVED) {
+    if (input.startsWith(reserved)) {
+      return [new ReservedToken(reserved), input.slice(reserved.length)];
     }
   }
   return undefined;
@@ -422,10 +421,10 @@ function lexReserved(input: string): [ReservedToken, string] | undefined {
 function lexWhitespace(input: string): [WhitespaceToken, string] | undefined {
   let whitespace = "";
   while (true) {
-    for (const char of WHITESPACE_CHARS) {
-      if (input.startsWith(char)) {
-        whitespace += char;
-        input = input.slice(char.length);
+    for (const space of WHITESPACES) {
+      if (input.startsWith(space)) {
+        whitespace += space;
+        input = input.slice(space.length);
         continue;
       }
     }
@@ -441,12 +440,9 @@ function lexComment(input: string): [CommentToken, string] | undefined {
   let comment = "";
   if (input.startsWith("//")) {
     while (true) {
-      for (const char of NEWLINE_CHARS) {
-        if (input.startsWith(char)) {
-          return [
-            new CommentToken(),
-            input.slice(comment.length + char.length),
-          ];
+      for (const newline of NEWLINES) {
+        if (input.startsWith(newline)) {
+          return [new CommentToken(), input.slice(comment.length + newline.length)];
         }
       }
       comment += input[0];
