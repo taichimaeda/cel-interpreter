@@ -154,20 +154,28 @@ export function parser(tokens: Token[]): Expr {
   return ret[0];
 }
 
+function matchesControlToken(token: Token, ...controls: string[]): token is ControlToken {
+  return token instanceof ControlToken && controls.includes(token.control);
+}
+
+function matchesOperatorToken(token: Token, ...operators: string[]): token is OperatorToken {
+  return token instanceof OperatorToken && operators.includes(token.operator);
+}
+
 function parseExpr(tokens: Token[]): [OrExpr | TernaryExpr, Token[]] | undefined {
   let retCond = parseConditionalOr(tokens);
   if (retCond === undefined) {
     return undefined;
   }
   tokens = retCond[1];
-  if (tokens[0] instanceof OperatorToken && tokens[0].operator === "?") {
+  if (matchesControlToken(tokens[0], "?")) {
     tokens = tokens.slice(1);
     let retThen = parseConditionalOr(tokens);
     if (retThen === undefined) {
       return undefined;
     }
     tokens = retThen[1];
-    if (!(tokens[0] instanceof OperatorToken && tokens[0].operator === ":")) {
+    if (!matchesControlToken(tokens[0], ":")) {
       return undefined;
     }
     tokens = tokens.slice(1);
@@ -189,7 +197,7 @@ function parseConditionalOr(tokens: Token[]): [OrExpr, Token[]] | undefined {
   }
   exprs.push(ret[0]);
   tokens = ret[1];
-  while (tokens[0] instanceof OperatorToken && tokens[0].operator === "||") {
+  while (matchesOperatorToken(tokens[0], "||")) {
     tokens = tokens.slice(1);
     const retExpr = parseConditionalAnd(tokens);
     if (retExpr === undefined) {
@@ -209,7 +217,7 @@ function parseConditionalAnd(tokens: Token[]): [AndExpr, Token[]] | undefined {
   }
   exprs.push(ret[0]);
   tokens = ret[1];
-  while (tokens[0] instanceof OperatorToken && tokens[0].operator === "&&") {
+  while (matchesOperatorToken(tokens[0], "&&")) {
     tokens = tokens.slice(1);
     const retExpr = parseRelation(tokens);
     if (retExpr === undefined) {
@@ -229,7 +237,7 @@ function parseRelation(tokens: Token[]): [RelExpr, Token[]] | undefined {
   }
   exprs.push(ret[0]);
   tokens = ret[1];
-  if (tokens[0] instanceof OperatorToken && ["<", "<=", ">=", ">", "==", "!=", "in"].includes(tokens[0].operator)) {
+  if (matchesOperatorToken(tokens[0], "<", "<=", ">=", ">", "==", "!=", "in")) {
     operators.push(tokens[0].operator);
     tokens = tokens.slice(1);
     const ret = parseAddition(tokens);
@@ -251,7 +259,7 @@ function parseAddition(tokens: Token[]): [AddExpr, Token[]] | undefined {
   }
   exprs.push(ret[0]);
   tokens = ret[1];
-  while (tokens[0] instanceof OperatorToken && ["+", "-"].includes(tokens[0].operator)) {
+  while (matchesOperatorToken(tokens[0], "+", "-")) {
     operators.push(tokens[0].operator);
     tokens = tokens.slice(1);
     const ret = parseMultiplication(tokens);
@@ -273,7 +281,7 @@ function parseMultiplication(tokens: Token[]): [MultExpr, Token[]] | undefined {
   }
   exprs.push(ret[0]);
   tokens = ret[1];
-  while (tokens[0] instanceof OperatorToken && ["*", "/", "%"].includes(tokens[0].operator)) {
+  while (matchesOperatorToken(tokens[0], "*", "/", "%")) {
     operators.push(tokens[0].operator);
     tokens = tokens.slice(1);
     const ret = parseUnary(tokens);
@@ -288,10 +296,10 @@ function parseMultiplication(tokens: Token[]): [MultExpr, Token[]] | undefined {
 
 function parseUnary(tokens: Token[]): [UnaryExpr, Token[]] | undefined {
   const operators: string[] = [];
-  if (tokens[0] instanceof OperatorToken && ["!", "-"].includes(tokens[0].operator)) {
+  if (matchesOperatorToken(tokens[0], "!", "-")) {
     const firstOperator = tokens[0];
     operators.push(tokens[0].operator);
-    while (tokens[0] instanceof OperatorToken && tokens[0].operator === firstOperator.operator) {
+    while (matchesOperatorToken(tokens[0], firstOperator.operator)) {
       operators.push(tokens[0].operator);
       tokens = tokens.slice(1);
     }
@@ -305,6 +313,13 @@ function parseUnary(tokens: Token[]): [UnaryExpr, Token[]] | undefined {
   return [new UnaryExpr(unary, operators), tokens];
 }
 
+function newIdentExpr(name: string): Expr {
+  // TODO: Find a better way to handle method call syntax
+  const addExpr = new AddExpr([new MultExpr([new UnaryExpr(new Ident(name), [])], [])], []);
+  const orExpr = new OrExpr([new AndExpr([new RelExpr([addExpr], [])])]);
+  return orExpr;
+}
+
 function parseMember(tokens: Token[]): [Member, Token[]] | undefined {
   const retPrimary = parsePrimary(tokens);
   if (retPrimary !== undefined) {
@@ -316,9 +331,9 @@ function parseMember(tokens: Token[]): [Member, Token[]] | undefined {
   }
   const member = retMember[0];
   tokens = retMember[1];
-  if (tokens[0] instanceof ControlToken && (tokens[0].control === "." || tokens[0].control === "(")) {
+  if (matchesControlToken(tokens[0], ".", "(")) {
     let method;
-    if (tokens[0] instanceof ControlToken && tokens[0].control === ".") {
+    if (matchesControlToken(tokens[0], ".")) {
       tokens = tokens.slice(1);
       if (!(tokens[0] instanceof IdentToken)) {
         return undefined;
@@ -326,7 +341,7 @@ function parseMember(tokens: Token[]): [Member, Token[]] | undefined {
       method = tokens[0].ident;
       tokens = tokens.slice(1);
     }
-    if (!(tokens[0] instanceof ControlToken && tokens[0].control === "(")) {
+    if (!matchesControlToken(tokens[0], "(")) {
       return undefined;
     }
     tokens = tokens.slice(1);
@@ -336,20 +351,16 @@ function parseMember(tokens: Token[]): [Member, Token[]] | undefined {
     }
     const exprList = retExprList[0];
     if (method !== undefined) {
-      exprList.unshift(
-        // TODO: Find a better way to handle method call syntax
-        // prettier-ignore
-        new OrExpr([new AndExpr([new RelExpr([new AddExpr([new MultExpr([new UnaryExpr(new Ident(method), [])], [])], [])], [])])])
-      );
+      exprList.unshift(newIdentExpr(method));
     }
     tokens = retExprList[1];
-    if (!(tokens[0] instanceof ControlToken && tokens[0].control === ")")) {
+    if (!matchesControlToken(tokens[0], ")")) {
       return undefined;
     }
     tokens = tokens.slice(1);
     return [new FuncCallExpr(member, exprList), tokens];
   }
-  if (tokens[0] instanceof ControlToken && tokens[0].control === "[") {
+  if (matchesControlToken(tokens[0], "[")) {
     tokens = tokens.slice(1);
     const retExpr = parseExpr(tokens);
     if (retExpr === undefined) {
@@ -357,7 +368,7 @@ function parseMember(tokens: Token[]): [Member, Token[]] | undefined {
     }
     const expr = retExpr[0];
     tokens = retExpr[1];
-    if (!(tokens[0] instanceof ControlToken && tokens[0].control === "]")) {
+    if (!matchesControlToken(tokens[0], "]")) {
       return undefined;
     }
     tokens = tokens.slice(1);
@@ -376,7 +387,7 @@ function parsePrimary(tokens: Token[]): [Primary, Token[]] | undefined {
     tokens = tokens.slice(1);
     return [new Ident(ident), tokens];
   }
-  if (tokens[0] instanceof ControlToken && tokens[0].control === "(") {
+  if (matchesControlToken(tokens[0], "(")) {
     tokens = tokens.slice(1);
     const retExpr = parseExpr(tokens);
     if (retExpr === undefined) {
@@ -384,13 +395,13 @@ function parsePrimary(tokens: Token[]): [Primary, Token[]] | undefined {
     }
     const expr = retExpr[0];
     tokens = retExpr[1];
-    if (!(tokens[0] instanceof ControlToken && tokens[0].control === ")")) {
+    if (!matchesControlToken(tokens[0], ")")) {
       return undefined;
     }
     tokens = tokens.slice(1);
     return [expr, tokens];
   }
-  if (tokens[0] instanceof ControlToken && tokens[0].control === "[") {
+  if (matchesControlToken(tokens[0], "[")) {
     tokens = tokens.slice(1);
     const retExprList = parseExprList(tokens);
     if (retExprList === undefined) {
@@ -398,16 +409,16 @@ function parsePrimary(tokens: Token[]): [Primary, Token[]] | undefined {
     }
     const exprList = retExprList[0];
     tokens = retExprList[1];
-    if (tokens[0] instanceof ControlToken && tokens[0].control === ",") {
+    if (matchesControlToken(tokens[0], ",")) {
       tokens = tokens.slice(1);
     }
-    if (!(tokens[0] instanceof ControlToken && tokens[0].control === "]")) {
+    if (!matchesControlToken(tokens[0], "]")) {
       return undefined;
     }
     tokens = tokens.slice(1);
     return [new ListExpr(exprList), tokens];
   }
-  if (tokens[0] instanceof ControlToken && tokens[0].control === "{") {
+  if (matchesControlToken(tokens[0], "{")) {
     tokens = tokens.slice(1);
     const retMapInits = parseMapInits(tokens);
     if (retMapInits === undefined) {
@@ -415,10 +426,10 @@ function parsePrimary(tokens: Token[]): [Primary, Token[]] | undefined {
     }
     const mapInits = retMapInits[0];
     tokens = retMapInits[1];
-    if (tokens[0] instanceof ControlToken && tokens[0].control === ",") {
+    if (matchesControlToken(tokens[0], ",")) {
       tokens = tokens.slice(1);
     }
-    if (!(tokens[0] instanceof ControlToken && tokens[0].control === "}")) {
+    if (!matchesControlToken(tokens[0], "}")) {
       return undefined;
     }
     tokens = tokens.slice(1);
@@ -468,7 +479,7 @@ function parseLiteral(tokens: Token[]): [Literal, Token[]] | undefined {
 
 function parseExprList(tokens: Token[]): [Expr[], Token[]] | undefined {
   const exprs: Expr[] = [];
-  while (tokens[0] instanceof ControlToken && tokens[0].control === ",") {
+  while (matchesControlToken(tokens[0], ",")) {
     tokens = tokens.slice(1);
     const ret = parseExpr(tokens);
     if (ret === undefined) {
@@ -485,7 +496,7 @@ function parseExprList(tokens: Token[]): [Expr[], Token[]] | undefined {
 
 function parseMapInits(tokens: Token[]): [[Expr, Expr][], Token[]] | undefined {
   const mapInits: [Expr, Expr][] = [];
-  while (tokens[0] instanceof ControlToken && tokens[0].control === ",") {
+  while (matchesControlToken(tokens[0], ",")) {
     tokens = tokens.slice(1);
     const retKey = parseExpr(tokens);
     if (retKey === undefined) {
@@ -493,7 +504,7 @@ function parseMapInits(tokens: Token[]): [[Expr, Expr][], Token[]] | undefined {
     }
     const key = retKey[0];
     tokens = retKey[1];
-    if (!(tokens[0] instanceof ControlToken && tokens[0].control === ":")) {
+    if (!matchesControlToken(tokens[0], ":")) {
       return undefined;
     }
     tokens = tokens.slice(1);
