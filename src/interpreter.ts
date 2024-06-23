@@ -121,6 +121,7 @@ function evalRelExpr(relExpr: RelExpr, activation: Activation): Value {
   if (ops.length === 1) {
     return exprs[0];
   }
+  // TODO: Handle in operator
   if (
     exprs.every((expr) => expr instanceof IntValue || expr instanceof UintValue || expr instanceof FloatValue) ||
     exprs.every((expr) => expr instanceof StringValue) ||

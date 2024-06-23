@@ -98,40 +98,40 @@ const CONTROLS: string[] = ["?", ":", ".", "(", ")", "[", "]", "{", "}", ","];
 const OPERATORS: string[] = ["||", "&&", "<", "<=", ">=", ">", "==", "!=", "in", "+", "-", "*", "/", "%", "!"];
 // prettier-ignore
 const RESERVED: string[] = ["as", "break", "const", "continue", "else", "for", "function", "if", "import", "let", "loop", "package", "namespace", "return", "var", "void", "while"];
-const NEWLINES: string[] = ["\r\n", "\r", "\n"];
-const WHITESPACES: string[] = [" ", "\t", "\n", "\f", "\r"];
 
 function lexer(input: string): Token[] {
   const tokens: Token[] = [];
   const lexers = [
+    lexWhitespace,
+    lexComment,
     lexControl, // Before lexIdent
     lexOperator, // Before lexIdent
     lexReserved, // Before lexIdent
-    lexIdent,
     lexUintLit, // Before lexIntLit
     lexIntLit,
     lexStringLit,
     lexByteLit,
     lexBoolLit,
     lexNullLit,
-    lexWhitespace,
-    lexComment,
+    lexIdent,
   ];
   while (input !== "") {
+    let found = false;
     for (const lexer of lexers) {
       const lexed = lexer(input);
       if (lexed !== undefined) {
         const [token, rest] = lexed;
-        if (!(token instanceof WhitespaceToken || token instanceof CommentToken)) {
-          tokens.push(token);
-          input = rest;
-        }
+        tokens.push(token);
+        input = rest;
+        found = true;
         break;
       }
     }
-    throw new Error(`Unexpected character: ${input[0]}`);
+    if (!found) {
+      throw new Error(`Unexpected character: ${input[0]}`);
+    }
   }
-  return tokens;
+  return tokens.filter((token) => !(token instanceof WhitespaceToken || token instanceof CommentToken));
 }
 
 function lexControl(input: string): [ControlToken, string] | undefined {
@@ -350,13 +350,11 @@ function lexStringLitSingle(input: string): [string, string] | undefined {
         input = input.slice(1);
         continue;
       }
-      for (const newline of NEWLINES) {
-        if (input.startsWith(newline)) {
-          return undefined;
-        }
+      if (startsWithNewline(input)) {
+        return undefined;
       }
       if (input.startsWith(quote) && !escape) {
-        return [str, input.slice(str.length + 1)];
+        return [str, input.slice(1)];
       }
       str += input[0];
       input = input.slice(1);
@@ -420,36 +418,50 @@ function lexReserved(input: string): [ReservedToken, string] | undefined {
   return undefined;
 }
 
+function startsWithNewline(str: string): boolean {
+  return str.startsWith("\r\n") || str.startsWith("\r") || str.startsWith("\n");
+}
+
+function startsWithWhitespace(str: string): boolean {
+  return (
+    str.startsWith(" ") || str.startsWith("\t") || str.startsWith("\n") || str.startsWith("\f") || str.startsWith("\r")
+  );
+}
+
 function lexWhitespace(input: string): [WhitespaceToken, string] | undefined {
-  let whitespace = "";
+  if (!startsWithWhitespace(input)) {
+    return undefined;
+  }
   while (true) {
-    for (const space of WHITESPACES) {
-      if (input.startsWith(space)) {
-        whitespace += space;
-        input = input.slice(space.length);
-        continue;
-      }
+    if (startsWithWhitespace(input)) {
+      input = input.slice(1);
+      continue;
     }
     break;
   }
-  if (whitespace === "") {
-    return undefined;
-  }
-  return [new WhitespaceToken(), input.slice(whitespace.length)];
+  return [new WhitespaceToken(), input];
 }
 
 function lexComment(input: string): [CommentToken, string] | undefined {
-  let comment = "";
   if (input.startsWith("//")) {
     while (true) {
-      for (const newline of NEWLINES) {
-        if (input.startsWith(newline)) {
-          return [new CommentToken(), input.slice(comment.length + newline.length)];
-        }
+      if (startsWithNewline(input)) {
+        // TODO: Simplify this
+        const length = input.startsWith("\r\n") ? 2 : 1;
+        return [new CommentToken(), input.slice(length)];
       }
-      comment += input[0];
       input = input.slice(1);
     }
   }
   return undefined;
 }
+
+function testLexer() {
+  const input = `myNum == 123 && myStr == "hello" || myBool == true`;
+  const lexed = lexer(input);
+  lexed.forEach((token) => {
+    console.log(token);
+  });
+}
+
+testLexer();
