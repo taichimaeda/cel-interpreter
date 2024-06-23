@@ -31,35 +31,56 @@ WHITESPACE     ::= [\t\n\f\r ]+
 COMMENT        ::= '//' ~NEWLINE* NEWLINE
 */
 
-type TokenKind =
-  | "IDENT"
-  | "INT_LIT"
-  | "UINT_LIT"
-  | "FLOAT_LIT"
-  | "STRING_LIT"
-  | "BYTE_LIT"
-  | "BOOL_LIT"
-  | "NULL_LIT"
-  | "RESERVED"
-  | "WHITESPACE"
-  | "COMMENT";
-type TokenType =
-  | "INT"
-  | "UINT"
-  | "DOUBLE"
-  | "BOOL"
-  | "STRING"
-  | "BYTES"
-  | "NULL";
-type byte = Uint8Array;
-type TokenValue = number | string | boolean | Uint8Array | null;
+type Token =
+  | IdentToken
+  | IntLitToken
+  | UintLitToken
+  | FloatLitToken
+  | StringLitToken
+  | ByteLitToken
+  | BoolLitToken
+  | NullLitToken
+  | ReservedToken
+  | WhitespaceToken
+  | CommentToken;
 
-class Token {
-  constructor(
-    public readonly type: TokenKind,
-    public readonly value: TokenValue
-  ) {}
+class IdentToken {
+  constructor(public readonly ident: string) {}
 }
+
+class IntLitToken {
+  constructor(public readonly value: number) {}
+}
+
+class UintLitToken {
+  constructor(public readonly value: number) {}
+}
+
+class FloatLitToken {
+  constructor(public readonly value: number) {}
+}
+
+class StringLitToken {
+  constructor(public readonly value: string) {}
+}
+
+class ByteLitToken {
+  constructor(public readonly value: string) {}
+}
+
+class BoolLitToken {
+  constructor(public readonly value: boolean) {}
+}
+
+class NullLitToken {}
+
+class ReservedToken {
+  constructor(public readonly keyword: string) {}
+}
+
+class WhitespaceToken {} // Ignored
+
+class CommentToken {} // Ignored
 
 const NEWLINE_CHARS: string[] = ["\r\n", "\r", "\n"];
 const WHITESPACE_CHARS: string[] = [" ", "\t", "\n", "\f", "\r"];
@@ -102,8 +123,12 @@ function lexer(input: string): Token[] {
       const lexed = lexer(input);
       if (lexed !== undefined) {
         const [token, rest] = lexed;
-        tokens.push(token);
-        input = rest;
+        if (
+          !(token instanceof WhitespaceToken || token instanceof CommentToken)
+        ) {
+          tokens.push(token);
+          input = rest;
+        }
         break;
       }
     }
@@ -129,7 +154,7 @@ function lexIdent(input: string): [Token, string] | undefined {
     ident += input[0];
     input = input.slice(1);
   }
-  return [new Token("IDENT", ident), input];
+  return [new IdentToken(ident), input];
 }
 
 function isDigit(c: string): boolean {
@@ -142,19 +167,19 @@ function isHexDigit(c: string): boolean {
   );
 }
 
-function lexUintLit(input: string): [Token, string] | undefined {
+function lexUintLit(input: string): [UintLitToken, string] | undefined {
   const lexed = lexIntLit(input);
   if (lexed === undefined) {
     return undefined;
   }
   const [token, rest] = lexed;
   if (input.startsWith("u") || input.startsWith("U")) {
-    return [new Token("UINT_LIT", token.value), rest.slice(1)];
+    return [new UintLitToken(token.value), rest.slice(1)];
   }
   return undefined;
 }
 
-function lexIntLit(input: string): [Token, string] | undefined {
+function lexIntLit(input: string): [IntLitToken, string] | undefined {
   const lexers = [lexIntLitDec, lexIntLitHex];
   for (const lexer of lexers) {
     const lexed = lexer(input);
@@ -165,7 +190,7 @@ function lexIntLit(input: string): [Token, string] | undefined {
   return undefined;
 }
 
-function lexIntLitDec(input: string): [Token, string] | undefined {
+function lexIntLitDec(input: string): [IntLitToken, string] | undefined {
   let positive = true;
   if (input.startsWith("-")) {
     positive = false;
@@ -179,10 +204,10 @@ function lexIntLitDec(input: string): [Token, string] | undefined {
     digits += input[0];
     input = input.slice(1);
   }
-  return [new Token("INT_LIT", parseInt(digits) * (positive ? 1 : -1)), input];
+  return [new IntLitToken(parseInt(digits) * (positive ? 1 : -1)), input];
 }
 
-function lexIntLitHex(input: string): [Token, string] | undefined {
+function lexIntLitHex(input: string): [IntLitToken, string] | undefined {
   let positive = true;
   if (input.startsWith("-")) {
     positive = false;
@@ -198,15 +223,12 @@ function lexIntLitHex(input: string): [Token, string] | undefined {
       digits += input[0];
       input = input.slice(1);
     }
-    return [
-      new Token("INT_LIT", parseInt(digits, 16) * (positive ? 1 : -1)),
-      input,
-    ];
+    return [new IntLitToken(parseInt(digits, 16) * (positive ? 1 : -1)), input];
   }
   return undefined;
 }
 
-function lexFloatWithDot(input: string): [Token, string] | undefined {
+function lexFloatWithDot(input: string): [FloatLitToken, string] | undefined {
   let positive = true;
   if (input.startsWith("-")) {
     positive = false;
@@ -233,19 +255,20 @@ function lexFloatWithDot(input: string): [Token, string] | undefined {
   }
   const lexed = lexExponent(input);
   if (lexed === undefined) {
-    return [new Token("FLOAT_LIT", parseFloat(`${digits}.${decimals}`)), input];
+    return [new FloatLitToken(parseFloat(`${digits}.${decimals}`)), input];
   }
   const [exponent, rest] = lexed;
   return [
-    new Token(
-      "FLOAT_LIT",
+    new FloatLitToken(
       parseFloat(`${digits}.${decimals}e${exponent}`) * (positive ? 1 : -1)
     ),
     rest,
   ];
 }
 
-function lexFloatWithoutDot(input: string): [Token, string] | undefined {
+function lexFloatWithoutDot(
+  input: string
+): [FloatLitToken, string] | undefined {
   let positive = true;
   if (input.startsWith("-")) {
     positive = false;
@@ -265,8 +288,7 @@ function lexFloatWithoutDot(input: string): [Token, string] | undefined {
   }
   const [exponent, rest] = lexed;
   return [
-    new Token(
-      "FLOAT_LIT",
+    new FloatLitToken(
       parseFloat(`${digits}e${exponent}`) * (positive ? 1 : -1)
     ),
     rest,
@@ -296,7 +318,7 @@ function lexExponent(input: string): [number, string] | undefined {
   return [parseFloat(exponent) * (positive ? 1 : -1), input];
 }
 
-function lexStringLit(input: string): [Token, string] | undefined {
+function lexStringLit(input: string): [StringLitToken, string] | undefined {
   let raw = false;
   if (input.startsWith("r") || input.startsWith("R")) {
     raw = true;
@@ -307,7 +329,7 @@ function lexStringLit(input: string): [Token, string] | undefined {
     const lexed = lexer(input);
     if (lexed !== undefined) {
       const [str, rest] = lexed;
-      const token = new Token("STRING_LIT", raw ? String.raw`${str}` : str); // TODO: Make sure this works
+      const token = new StringLitToken(raw ? String.raw`${str}` : str); // TODO: Make sure this works
       return [token, rest];
     }
   }
@@ -359,45 +381,45 @@ function lexStringLitMulti(input: string): [string, string] | undefined {
   return undefined;
 }
 
-function lexByteLit(input: string): [Token, string] | undefined {
+function lexByteLit(input: string): [ByteLitToken, string] | undefined {
   if (input.startsWith("b") || input.startsWith("B")) {
     const lexed = lexStringLit(input.slice(1));
     if (lexed === undefined) {
       return undefined;
     }
     const [token, rest] = lexed;
-    return [new Token("BYTE_LIT", token.value), rest];
+    return [new ByteLitToken(token.value), rest];
   }
   return undefined;
 }
 
-function lexBoolLit(input: string): [Token, string] | undefined {
+function lexBoolLit(input: string): [BoolLitToken, string] | undefined {
   if (input.startsWith("true")) {
-    return [new Token("BOOL_LIT", true), input.slice(4)];
+    return [new BoolLitToken(true), input.slice(4)];
   }
   if (input.startsWith("false")) {
-    return [new Token("BOOL_LIT", false), input.slice(5)];
+    return [new BoolLitToken(false), input.slice(5)];
   }
   return undefined;
 }
 
-function lexNullLit(input: string): [Token, string] | undefined {
+function lexNullLit(input: string): [NullLitToken, string] | undefined {
   if (input.startsWith("null")) {
-    return [new Token("NULL_LIT", null), input.slice(4)];
+    return [new NullLitToken(), input.slice(4)];
   }
   return undefined;
 }
 
-function lexReserved(input: string): [Token, string] | undefined {
+function lexReserved(input: string): [ReservedToken, string] | undefined {
   for (const keyword of RESERVED_KEYWORDS) {
     if (input.startsWith(keyword)) {
-      return [new Token("RESERVED", keyword), input.slice(keyword.length)];
+      return [new ReservedToken(keyword), input.slice(keyword.length)];
     }
   }
   return undefined;
 }
 
-function lexWhitespace(input: string): [Token, string] | undefined {
+function lexWhitespace(input: string): [WhitespaceToken, string] | undefined {
   let whitespace = "";
   while (true) {
     for (const char of WHITESPACE_CHARS) {
@@ -412,17 +434,17 @@ function lexWhitespace(input: string): [Token, string] | undefined {
   if (whitespace === "") {
     return undefined;
   }
-  return [new Token("WHITESPACE", whitespace), input.slice(whitespace.length)];
+  return [new WhitespaceToken(), input.slice(whitespace.length)];
 }
 
-function lexComment(input: string): [Token, string] | undefined {
+function lexComment(input: string): [CommentToken, string] | undefined {
   let comment = "";
   if (input.startsWith("//")) {
     while (true) {
       for (const char of NEWLINE_CHARS) {
         if (input.startsWith(char)) {
           return [
-            new Token("COMMENT", comment),
+            new CommentToken(),
             input.slice(comment.length + char.length),
           ];
         }
