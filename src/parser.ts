@@ -47,92 +47,106 @@ Primary ::= LITERAL
         | "{" [MapInits] [","] "}" 
         ;
 */
+import {
+  BoolLitToken,
+  ByteLitToken,
+  ControlToken,
+  FloatLitToken,
+  IdentToken,
+  IntLitToken,
+  lexer,
+  NullLitToken,
+  OperatorToken,
+  StringLitToken,
+  Token,
+  UintLitToken,
+} from "./lexer";
 
-type Expr = OrExpr | TernaryExpr;
+export type Expr = OrExpr | TernaryExpr;
 
-class TernaryExpr {
+export class TernaryExpr {
   constructor(public readonly cond: OrExpr, public readonly then?: OrExpr, public readonly els?: Expr) {}
 }
 
-class OrExpr {
+export class OrExpr {
   constructor(public readonly exprs: AndExpr[]) {}
 }
 
-class AndExpr {
+export class AndExpr {
   constructor(public readonly exprs: RelExpr[]) {}
 }
 
-class RelExpr {
+export class RelExpr {
   constructor(public readonly exprs: AddExpr[], public readonly ops: string[]) {}
 }
 
-class AddExpr {
+export class AddExpr {
   constructor(public readonly exprs: MultExpr[], public readonly ops: string[]) {}
 }
 
-class MultExpr {
+export class MultExpr {
   constructor(public readonly exprs: UnaryExpr[], public readonly ops: string[]) {}
 }
 
-class UnaryExpr {
+export class UnaryExpr {
   constructor(public readonly member: Member, public readonly ops: string[]) {}
 }
 
-type Member = Primary | FuncCallExpr | IndexExpr;
+export type Member = Primary | FuncCallExpr | IndexExpr;
 
-type Primary = Literal | Ident | Expr | ListExpr | MapExpr;
+export type Primary = Literal | Ident | Expr | ListExpr | MapExpr;
 
-type Literal = IntLit | UintLit | FloatLit | StringLit | ByteLit | BoolLit | NullLit;
+export type Literal = IntLit | UintLit | FloatLit | StringLit | ByteLit | BoolLit | NullLit;
 
-class IntLit {
+export class IntLit {
   constructor(public readonly value: number) {}
 }
 
-class UintLit {
+export class UintLit {
   constructor(public readonly value: number) {}
 }
 
-class FloatLit {
+export class FloatLit {
   constructor(public readonly value: number) {}
 }
 
-class StringLit {
+export class StringLit {
   constructor(public readonly value: string) {}
 }
 
-class ByteLit {
+export class ByteLit {
   constructor(public readonly value: string) {}
 }
 
-class BoolLit {
+export class BoolLit {
   constructor(public readonly value: boolean) {}
 }
 
-class NullLit {
+export class NullLit {
   constructor(public readonly value: null = null) {}
 }
 
-class ListExpr {
+export class ListExpr {
   constructor(public readonly exprs: Expr[]) {}
 }
 
-class MapExpr {
+export class MapExpr {
   constructor(public readonly exprs: [Expr, Expr][]) {}
 }
 
-class Ident {
+export class Ident {
   constructor(public readonly name: string) {}
 }
 
-class IndexExpr {
+export class IndexExpr {
   constructor(public readonly member: Member, public readonly index: Expr) {}
 }
 
-class FuncCallExpr {
+export class FuncCallExpr {
   constructor(public readonly member: Member, public readonly exprs: Expr[]) {}
 }
 
-function parser(tokens: Token[]): Expr {
+export function parser(tokens: Token[]): Expr {
   const ret = parseExpr(tokens);
   if (ret === undefined) {
     throw new Error("Unexpected end of input");
@@ -302,9 +316,9 @@ function parseMember(tokens: Token[]): [Member, Token[]] | undefined {
   }
   const member = retMember[0];
   tokens = retMember[1];
-  if (tokens[0] === "." || tokens[0] === "(") {
+  if (tokens[0] instanceof ControlToken && (tokens[0].control === "." || tokens[0].control === "(")) {
     let method;
-    if (tokens[0] === ".") {
+    if (tokens[0] instanceof ControlToken && tokens[0].control === ".") {
       tokens = tokens.slice(1);
       if (!(tokens[0] instanceof IdentToken)) {
         return undefined;
@@ -312,7 +326,7 @@ function parseMember(tokens: Token[]): [Member, Token[]] | undefined {
       method = tokens[0].ident;
       tokens = tokens.slice(1);
     }
-    if (tokens[0] !== "(") {
+    if (!(tokens[0] instanceof ControlToken && tokens[0].control === "(")) {
       return undefined;
     }
     tokens = tokens.slice(1);
@@ -329,13 +343,13 @@ function parseMember(tokens: Token[]): [Member, Token[]] | undefined {
       );
     }
     tokens = retExprList[1];
-    if (tokens[0] !== ")") {
+    if (!(tokens[0] instanceof ControlToken && tokens[0].control === ")")) {
       return undefined;
     }
     tokens = tokens.slice(1);
     return [new FuncCallExpr(member, exprList), tokens];
   }
-  if (tokens[0] === "[") {
+  if (tokens[0] instanceof ControlToken && tokens[0].control === "[") {
     tokens = tokens.slice(1);
     const retExpr = parseExpr(tokens);
     if (retExpr === undefined) {
@@ -343,7 +357,7 @@ function parseMember(tokens: Token[]): [Member, Token[]] | undefined {
     }
     const expr = retExpr[0];
     tokens = retExpr[1];
-    if (tokens[0] !== "]") {
+    if (!(tokens[0] instanceof ControlToken && tokens[0].control === "]")) {
       return undefined;
     }
     tokens = tokens.slice(1);
@@ -362,7 +376,7 @@ function parsePrimary(tokens: Token[]): [Primary, Token[]] | undefined {
     tokens = tokens.slice(1);
     return [new Ident(ident), tokens];
   }
-  if (tokens[0] === "(") {
+  if (tokens[0] instanceof ControlToken && tokens[0].control === "(") {
     tokens = tokens.slice(1);
     const retExpr = parseExpr(tokens);
     if (retExpr === undefined) {
@@ -370,13 +384,13 @@ function parsePrimary(tokens: Token[]): [Primary, Token[]] | undefined {
     }
     const expr = retExpr[0];
     tokens = retExpr[1];
-    if (tokens[0] !== ")") {
+    if (!(tokens[0] instanceof ControlToken && tokens[0].control === ")")) {
       return undefined;
     }
     tokens = tokens.slice(1);
     return [expr, tokens];
   }
-  if (tokens[0] === "[") {
+  if (tokens[0] instanceof ControlToken && tokens[0].control === "[") {
     tokens = tokens.slice(1);
     const retExprList = parseExprList(tokens);
     if (retExprList === undefined) {
@@ -384,16 +398,16 @@ function parsePrimary(tokens: Token[]): [Primary, Token[]] | undefined {
     }
     const exprList = retExprList[0];
     tokens = retExprList[1];
-    if (tokens[0] === ",") {
+    if (tokens[0] instanceof ControlToken && tokens[0].control === ",") {
       tokens = tokens.slice(1);
     }
-    if (tokens[0] !== "]") {
+    if (!(tokens[0] instanceof ControlToken && tokens[0].control === "]")) {
       return undefined;
     }
     tokens = tokens.slice(1);
     return [new ListExpr(exprList), tokens];
   }
-  if (tokens[0] === "{") {
+  if (tokens[0] instanceof ControlToken && tokens[0].control === "{") {
     tokens = tokens.slice(1);
     const retMapInits = parseMapInits(tokens);
     if (retMapInits === undefined) {
@@ -401,10 +415,10 @@ function parsePrimary(tokens: Token[]): [Primary, Token[]] | undefined {
     }
     const mapInits = retMapInits[0];
     tokens = retMapInits[1];
-    if (tokens[0] === ",") {
+    if (tokens[0] instanceof ControlToken && tokens[0].control === ",") {
       tokens = tokens.slice(1);
     }
-    if (tokens[0] !== "}") {
+    if (!(tokens[0] instanceof ControlToken && tokens[0].control === "}")) {
       return undefined;
     }
     tokens = tokens.slice(1);
@@ -454,7 +468,7 @@ function parseLiteral(tokens: Token[]): [Literal, Token[]] | undefined {
 
 function parseExprList(tokens: Token[]): [Expr[], Token[]] | undefined {
   const exprs: Expr[] = [];
-  while (tokens[0] === ",") {
+  while (tokens[0] instanceof ControlToken && tokens[0].control === ",") {
     tokens = tokens.slice(1);
     const ret = parseExpr(tokens);
     if (ret === undefined) {
@@ -471,7 +485,7 @@ function parseExprList(tokens: Token[]): [Expr[], Token[]] | undefined {
 
 function parseMapInits(tokens: Token[]): [[Expr, Expr][], Token[]] | undefined {
   const mapInits: [Expr, Expr][] = [];
-  while (tokens[0] === ",") {
+  while (tokens[0] instanceof ControlToken && tokens[0].control === ",") {
     tokens = tokens.slice(1);
     const retKey = parseExpr(tokens);
     if (retKey === undefined) {
@@ -479,7 +493,7 @@ function parseMapInits(tokens: Token[]): [[Expr, Expr][], Token[]] | undefined {
     }
     const key = retKey[0];
     tokens = retKey[1];
-    if (tokens[0] !== ":") {
+    if (!(tokens[0] instanceof ControlToken && tokens[0].control === ":")) {
       return undefined;
     }
     tokens = tokens.slice(1);
@@ -496,3 +510,12 @@ function parseMapInits(tokens: Token[]): [[Expr, Expr][], Token[]] | undefined {
   }
   return [mapInits, tokens];
 }
+
+function testParser() {
+  const input = `myNum == 123 && (myStr == "hello" || myBool == true)`;
+  const lexed = lexer(input);
+  const parsed = parser(lexed);
+  console.log(parsed);
+}
+
+testParser();

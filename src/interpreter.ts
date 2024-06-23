@@ -2,44 +2,80 @@
 List of standard definitions
 https://github.com/google/cel-spec/blob/master/doc/langdef.md#list-of-standard-definitions
 */
+import { builtin } from "./builtin";
+import { lexer } from "./lexer";
+import {
+  AddExpr,
+  AndExpr,
+  BoolLit,
+  ByteLit,
+  Expr,
+  FloatLit,
+  FuncCallExpr,
+  Ident,
+  IndexExpr,
+  IntLit,
+  ListExpr,
+  MapExpr,
+  Member,
+  MultExpr,
+  NullLit,
+  OrExpr,
+  parser,
+  Primary,
+  RelExpr,
+  StringLit,
+  TernaryExpr,
+  UintLit,
+  UnaryExpr,
+} from "./parser";
 
-type Activation = Record<string, Value>;
+export type Activation = Record<string, Value>;
 
-type Value = IntValue | UintValue | FloatValue | StringValue | ByteValue | BoolValue | NullValue | ListValue | MapValue;
+export type Value =
+  | IntValue
+  | UintValue
+  | FloatValue
+  | StringValue
+  | ByteValue
+  | BoolValue
+  | NullValue
+  | ListValue
+  | MapValue;
 
-class IntValue {
+export class IntValue {
   constructor(public readonly value: number) {}
 }
 
-class UintValue {
+export class UintValue {
   constructor(public readonly value: number) {}
 }
 
-class FloatValue {
+export class FloatValue {
   constructor(public readonly value: number) {}
 }
 
-class StringValue {
+export class StringValue {
   constructor(public readonly value: string) {}
 }
 
-class ByteValue {
+export class ByteValue {
   constructor(public readonly value: string) {}
 }
 
-class BoolValue {
+export class BoolValue {
   constructor(public readonly value: boolean) {}
 }
 
-class NullValue {
+export class NullValue {
   constructor(public readonly value: null = null) {}
 }
 
-class ListValue {
+export class ListValue {
   constructor(public readonly values: any[]) {}
 }
 
-class MapValue {
+export class MapValue {
   constructor(public readonly values: Record<any, any>[]) {}
 }
 
@@ -118,7 +154,7 @@ function mapValuesEqual(left: MapValue, right: MapValue): boolean {
 function evalRelExpr(relExpr: RelExpr, activation: Activation): Value {
   const exprs = relExpr.exprs.map((expr) => evalAddExpr(expr, activation));
   const ops = relExpr.ops;
-  if (ops.length === 1) {
+  if (ops.length === 0) {
     return exprs[0];
   }
   // TODO: Handle in operator
@@ -334,11 +370,9 @@ function evalFuncCallExpr(funcCallExpr: FuncCallExpr, activation: Activation): V
   if (!(member instanceof Ident)) {
     throw new Error(`Unexpected member ${member}`);
   }
-  const func = BUILTINS[member.name];
-  if (func === undefined) {
-    throw new Error(`Unexpected function ${member.name}`);
-  }
-  return func(...funcCallExpr.exprs.map((expr) => evalExpr(expr, activation)));
+  const method = member.name;
+  const args = funcCallExpr.exprs.map((expr) => evalExpr(expr, activation));
+  return builtin(method, ...args);
 }
 
 function evalPrimary(primary: Primary, activation: Activation): Value {
@@ -383,3 +417,18 @@ function evalIdent(ident: Ident, activation: Activation): Value {
   }
   return activation[ident.name];
 }
+
+function testInterpreter() {
+  const input = `myNum == 123 && (myStr == "hello" || myBool == true)`;
+  const lexed = lexer(input);
+  const parsed = parser(lexed);
+  const activation = {
+    myNum: new IntValue(13),
+    myStr: new StringValue("hello"),
+    myBool: new BoolValue(true),
+  };
+  const result = interpreter(parsed, activation);
+  console.log(result);
+}
+
+testInterpreter();

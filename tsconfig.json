@@ -1,0 +1,10 @@
+{
+  "ts-node": {
+    "files": true,
+    "compilerOptions": {
+      "target": "ESNext",
+      "module": "commonjs"
+    }
+  },
+  "compilerOptions": {}
+}

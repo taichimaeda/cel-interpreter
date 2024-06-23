@@ -31,7 +31,7 @@ WHITESPACE     ::= [\t\n\f\r ]+
 COMMENT        ::= '//' ~NEWLINE* NEWLINE
 */
 
-type Token =
+export type Token =
   | ControlToken
   | IdentToken
   | IntLitToken
@@ -45,53 +45,53 @@ type Token =
   | WhitespaceToken
   | CommentToken;
 
-class ControlToken {
+export class ControlToken {
   constructor(public readonly control: string) {}
 }
 
-class OperatorToken {
+export class OperatorToken {
   constructor(public readonly operator: string) {}
 }
 
-class IdentToken {
+export class IdentToken {
   constructor(public readonly ident: string) {}
 }
 
-class IntLitToken {
+export class IntLitToken {
   constructor(public readonly value: number) {}
 }
 
-class UintLitToken {
+export class UintLitToken {
   constructor(public readonly value: number) {}
 }
 
-class FloatLitToken {
+export class FloatLitToken {
   constructor(public readonly value: number) {}
 }
 
-class StringLitToken {
+export class StringLitToken {
   constructor(public readonly value: string) {}
 }
 
-class ByteLitToken {
+export class ByteLitToken {
   constructor(public readonly value: string) {}
 }
 
-class BoolLitToken {
+export class BoolLitToken {
   constructor(public readonly value: boolean) {}
 }
 
-class NullLitToken {
+export class NullLitToken {
   constructor(public readonly value: null = null) {}
 }
 
-class ReservedToken {
+export class ReservedToken {
   constructor(public readonly keyword: string) {}
 }
 
-class WhitespaceToken {} // Ignored
+export class WhitespaceToken {} // Ignored
 
-class CommentToken {} // Ignored
+export class CommentToken {} // Ignored
 
 const CONTROLS: string[] = ["?", ":", ".", "(", ")", "[", "]", "{", "}", ","];
 // prettier-ignore
@@ -99,7 +99,7 @@ const OPERATORS: string[] = ["||", "&&", "<", "<=", ">=", ">", "==", "!=", "in",
 // prettier-ignore
 const RESERVED: string[] = ["as", "break", "const", "continue", "else", "for", "function", "if", "import", "let", "loop", "package", "namespace", "return", "var", "void", "while"];
 
-function lexer(input: string): Token[] {
+export function lexer(input: string): Token[] {
   const tokens: Token[] = [];
   const lexers = [
     lexWhitespace,
@@ -457,11 +457,11 @@ function lexComment(input: string): [CommentToken, string] | undefined {
 }
 
 function testLexer() {
-  const input = `myNum == 123 && myStr == "hello" || myBool == true`;
+  const input = `myNum == 123 && (myStr == "hello" || myBool == true)`;
   const lexed = lexer(input);
-  lexed.forEach((token) => {
+  for (const token of lexed) {
     console.log(token);
-  });
+  }
 }
 
 testLexer();
