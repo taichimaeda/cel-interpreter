@@ -93,11 +93,11 @@ export class WhitespaceToken {} // Ignored
 
 export class CommentToken {} // Ignored
 
-const CONTROLS: string[] = ["?", ":", ".", "(", ")", "[", "]", "{", "}", ","];
+const CONTROLS = ["?", ":", ".", "(", ")", "[", "]", "{", "}", ","];
 // prettier-ignore
-const OPERATORS: string[] = ["||", "&&", "<", "<=", ">=", ">", "==", "!=", "in", "+", "-", "*", "/", "%", "!"];
+const OPERATORS = ["||", "&&", "<", "<=", ">=", ">", "==", "!=", "in", "+", "-", "*", "/", "%", "!"];
 // prettier-ignore
-const RESERVED: string[] = ["as", "break", "const", "continue", "else", "for", "function", "if", "import", "let", "loop", "package", "namespace", "return", "var", "void", "while"];
+const RESERVED = ["as", "break", "const", "continue", "else", "for", "function", "if", "import", "let", "loop", "package", "namespace", "return", "var", "void", "while"];
 
 export function lexer(input: string): Token[] {
   const tokens: Token[] = [];
