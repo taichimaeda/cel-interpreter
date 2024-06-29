@@ -109,6 +109,7 @@ export function lexer(input: string): Token[] {
     lexReserved, // Before lexIdent
     lexUintLit, // Before lexIntLit
     lexIntLit,
+    lexFloat,
     lexStringLit,
     lexByteLit,
     lexBoolLit,
@@ -237,6 +238,17 @@ function lexIntLitHex(input: string): [IntLitToken, string] | undefined {
       input = input.slice(1);
     }
     return [new IntLitToken(parseInt(digits, 16) * (positive ? 1 : -1)), input];
+  }
+  return undefined;
+}
+
+function lexFloat(input: string): [FloatLitToken, string] | undefined {
+  const lexers = [lexFloatWithDot, lexFloatWithoutDot];
+  for (const lexer of lexers) {
+    const lexed = lexer(input);
+    if (lexed !== undefined) {
+      return lexed;
+    }
   }
   return undefined;
 }
